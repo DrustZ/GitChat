@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
-import ReactFlow, {
+import {
+  ReactFlow,
   MiniMap,
   Controls,
   Background,
@@ -7,7 +8,9 @@ import ReactFlow, {
   useEdgesState,
   useReactFlow,
   useStoreApi,
-} from 'react-flow-renderer';
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+
 import { Menu, Item, useContextMenu } from 'react-contexify';
 import 'react-contexify/dist/ReactContexify.css';
 import UserInputNode from './UserInputNode';
@@ -34,7 +37,7 @@ function NodeChat() {
   const [message, setMessage] = useState('');
   const [selectedNode, setSelectedNode] = useState(null);
   const store = useStoreApi();
-  const { project, getViewport } = useReactFlow();
+  const { screenToFlowPosition } = useReactFlow();
   const { show } = useContextMenu({
     id: MENU_ID,
   });
@@ -111,14 +114,14 @@ function NodeChat() {
         event,
         props: {
           node,
-          position: project({
+          position: screenToFlowPosition({
             x: event.clientX - pane.left,
             y: event.clientY - pane.top,
           }),
         },
       });
     },
-    [show, project]
+    [show, screenToFlowPosition]
   );
 
   const handleReplicate = useCallback(({ props }) => {

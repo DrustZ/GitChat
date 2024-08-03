@@ -1,5 +1,5 @@
 import React from 'react';
-import { getBezierPath } from 'react-flow-renderer';
+import { getBezierPath } from '@xyflow/react';
 
 const CustomEdge = ({
   id,
@@ -31,7 +31,7 @@ const CustomEdge = ({
           stroke: '#bbb',
         }}
         className="react-flow__edge-path"
-        d={edgePath}
+        d={edgePath[0]}
       />
       <path
         style={{
@@ -40,7 +40,7 @@ const CustomEdge = ({
           fill: 'none',
           cursor: 'pointer',
         }}
-        d={edgePath}
+        d={edgePath[0]}
         onClick={() => data.onEdgeClick(id)}
       />
     </>

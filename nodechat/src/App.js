@@ -1,5 +1,5 @@
 import React from 'react';
-import { ReactFlowProvider } from 'react-flow-renderer';
+import { ReactFlowProvider } from '@xyflow/react';
 import NodeChat from './components/NodeChat';
 
 function App() {
