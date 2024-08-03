@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -31,6 +31,8 @@ function NodeChat() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const reactFlowWrapper = useRef(null);
+  const [message, setMessage] = useState('');
+  const [selectedNode, setSelectedNode] = useState(null);
   const store = useStoreApi();
   const { project, getViewport } = useReactFlow();
   const { show } = useContextMenu({
@@ -99,7 +101,7 @@ function NodeChat() {
     }
 
     return newNode;
-  }, [setNodes, setEdges, getViewport]);
+  }, [setNodes, setEdges, store]);
 
   const onNodeContextMenu = useCallback(
     (event, node) => {
@@ -144,6 +146,23 @@ function NodeChat() {
     addNode(newType, node, { x: 0, y: 150 }, null, true);
   }, [addNode]);
 
+  const handleSendMessage = useCallback(() => {
+    if (message.trim() === '') return;
+
+    let sourceNode = selectedNode && selectedNode.type === 'llmResponse' ? selectedNode : null;
+    const userNode = addNode('userInput', sourceNode, { x: 0, y: 150 }, message, !!sourceNode);
+    
+    // Automatically add an LLM response node
+    addNode('llmResponse', userNode, { x: 0, y: 150 }, 'LLM response placeholder', true);
+    
+    setMessage('');
+    setSelectedNode(null);
+  }, [message, selectedNode, addNode]);
+
+  const handleNodeClick = useCallback((event, node) => {
+    setSelectedNode(node);
+  }, []);
+
   return (
     <div className="h-full relative" ref={reactFlowWrapper}>
       <ReactFlow
@@ -154,7 +173,6 @@ function NodeChat() {
           key: edge.id
         }))}
         onMove={() => {
-          // Purely for example's sake
           currentOverlapOffset = 0;
         }}
         onNodesChange={onNodesChange}
@@ -163,13 +181,14 @@ function NodeChat() {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodeContextMenu={onNodeContextMenu}
+        onNodeClick={handleNodeClick}
         fitView
       >
         <Controls />
         <MiniMap />
         <Background variant="dots" gap={12} size={1} />
       </ReactFlow>
-      <div className="absolute top-4 left-4 z-10 flex space-x-2">
+      <div className="absolute top-4 left-4 z-20 flex space-x-2">
         <button 
           className="bg-green-500 text-white px-4 py-2 rounded"
           onClick={() => addNode('userInput')}
@@ -187,6 +206,23 @@ function NodeChat() {
         <Item onClick={handleReplicate}>Replicate Node</Item>
         <Item onClick={handleCreateConnectedNode}>Create Connected Node</Item>
       </Menu>
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 z-50">
+        <div className="flex items-center">
+          <input
+            type="text"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="flex-grow mr-2 p-2 border border-gray-300 rounded"
+            placeholder="Type your message here..."
+          />
+          <button
+            onClick={handleSendMessage}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Send
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

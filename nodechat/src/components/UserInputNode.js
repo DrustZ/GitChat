@@ -1,10 +1,12 @@
-import React, { memo, useState, useCallback } from 'react';
+import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
 import { Handle, Position, useReactFlow } from 'react-flow-renderer';
 
 const UserInputNode = ({ id, data }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(data.text);
+  const [textareaHeight, setTextareaHeight] = useState('auto');
   const { setNodes } = useReactFlow();
+  const textareaRef = useRef(null);
 
   const onDelete = useCallback(() => {
     setNodes((nodes) => nodes.filter((n) => n.id !== id));
@@ -26,6 +28,17 @@ const UserInputNode = ({ id, data }) => {
     );
   }, [id, setNodes, text]);
 
+  const handleDoubleClick = useCallback(() => {
+    setIsEditing(true);
+  }, []);
+
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [isEditing, text]);
+
   return (
     <div className="px-4 py-2 shadow-md rounded-md bg-green-100 border-2 border-green-300 relative">
       <Handle 
@@ -34,17 +47,22 @@ const UserInputNode = ({ id, data }) => {
         className="!w-3 !h-3 !bg-teal-500" 
         style={{ top: -10 }}
       />
-       <div className="font-bold text-sm text-green-700">User Input</div>
+      <div className="font-bold text-sm text-green-700">User Input</div>
       {isEditing ? (
         <textarea
-          className="w-full p-2 text-gray-700 border rounded"
+          ref={textareaRef}
+          className="w-full p-2 text-gray-700 border rounded resize-y min-h-[50px]"
           value={text}
           onChange={onTextChange}
           onBlur={onTextBlur}
           autoFocus
+          style={{ height: textareaHeight }}
         />
       ) : (
-        <div className="text-gray-700" onClick={() => setIsEditing(true)}>
+        <div 
+          className="text-gray-700 cursor-text" 
+          onDoubleClick={handleDoubleClick}
+        >
           {text}
         </div>
       )}

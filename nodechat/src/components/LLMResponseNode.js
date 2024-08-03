@@ -16,7 +16,7 @@ const LLMResponseNode = ({ id, data }) => {
 
   const onTextBlur = useCallback(() => {
     setIsEditing(false);
-    setNodes((nodes) =>
+    setNodes((nodes) => 
       nodes.map((node) => {
         if (node.id === id) {
           node.data = { ...node.data, text };
