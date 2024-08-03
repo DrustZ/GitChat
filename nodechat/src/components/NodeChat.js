@@ -6,6 +6,7 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   useReactFlow,
+  useStoreApi,
 } from 'react-flow-renderer';
 import { Menu, Item, useContextMenu } from 'react-contexify';
 import 'react-contexify/dist/ReactContexify.css';
@@ -23,11 +24,14 @@ const edgeTypes = {
 };
 
 const MENU_ID = 'node-context-menu';
+let currentOverlapOffset = 0;
+const OVERLAP_OFFSET = 10;
 
 function NodeChat() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const reactFlowWrapper = useRef(null);
+  const store = useStoreApi();
   const { project, getViewport } = useReactFlow();
   const { show } = useContextMenu({
     id: MENU_ID,
@@ -47,21 +51,28 @@ function NodeChat() {
   }, [setEdges]);
 
   const addNode = useCallback((type, sourceNode = null, offset = { x: 0, y: 0 }, text = null, connectToSource = false) => {
-    const viewport = getViewport();
-    let position;
+    const {
+      height,
+      width,
+      transform: [transformX, transformY, zoomLevel]
+    } = store.getState();
+    const zoomMultiplier = 1 / zoomLevel;
+    const centerX = -transformX * zoomMultiplier + (width * zoomMultiplier) / 2;
+    const centerY =
+      -transformY * zoomMultiplier + (height * zoomMultiplier) / 2;
 
+    let position;
     if (sourceNode) {
       position = {
         x: sourceNode.position.x + offset.x,
         y: sourceNode.position.y + offset.y,
       };
     } else {
-      const defaultX = 100;
-      const defaultY = 100;
       position = {
-        x: (viewport.x && !isNaN(viewport.x)) ? viewport.x + (viewport.width || 0) / 2 : defaultX,
-        y: (viewport.y && !isNaN(viewport.y)) ? viewport.y + (viewport.height || 0) / 2 : defaultY,
+        x: centerX + currentOverlapOffset,
+        y: centerY + currentOverlapOffset
       };
+      currentOverlapOffset += OVERLAP_OFFSET;
     }
 
     position.x = Number(position.x) || 0;
@@ -142,6 +153,10 @@ function NodeChat() {
           data: { onEdgeClick },
           key: edge.id
         }))}
+        onMove={() => {
+          // Purely for example's sake
+          currentOverlapOffset = 0;
+        }}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
