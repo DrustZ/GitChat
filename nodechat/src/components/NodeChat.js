@@ -8,6 +8,7 @@ import {
   useEdgesState,
   useReactFlow,
   useStoreApi,
+  SelectionMode,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Menu, Item, useContextMenu } from 'react-contexify';
@@ -126,7 +127,8 @@ function NodeChat() {
 
   const handleReplicate = useCallback(({ props }) => {
     const { node } = props;
-    const newNode = addNode(node.type, node, { x: 250, y: 0 }, node.data.text, false);
+    //add a small random offset to the new node
+    const newNode = addNode(node.type, node, { x: 200 + (Math.random()-0.5) * 100, y: (Math.random()-0.5) * 10 }, node.data.text, false);
     
     // Replicate upstream connections
     edges.forEach((edge) => {
@@ -147,12 +149,12 @@ function NodeChat() {
   const handleCreateConnectedNode = useCallback(({ props }) => {
     const { node } = props;
     const newType = node.type === 'userInput' ? 'llmResponse' : 'userInput';
-    addNode(newType, node, { x: 0, y: 150 }, null, true);
+    addNode(newType, node, { x: (Math.random()-0.5) * 100, y: 130 + (Math.random()-0.5) * 50 }, null, true);
   }, [addNode]);
 
   const setSelectNode = useCallback((node) => {
     setNodes((nds) =>
-      nds.map((n) => {        
+      nds.map((n) => {
         n.selected = n.id === node.id;
         return n;
       })
@@ -174,18 +176,14 @@ function NodeChat() {
       sourceNode = latestLLMResponseNode || null;
     }
 
-    const userNode = addNode('userInput', sourceNode, { x: 0, y: 150 }, message, !!sourceNode);
+    const userNode = addNode('userInput', sourceNode, { x: (Math.random()-0.5)*50, y: 130 + (Math.random()-0.5) * 50 }, message, !!sourceNode);
     
     // Automatically add an LLM response node
-    const llmNode = addNode('llmResponse', userNode, { x: 0, y: 150 }, 'LLM response placeholder', true);
+    const llmNode = addNode('llmResponse', userNode, { x: 0, y: 150}, 'LLM response placeholder', true);
     
     setMessage('');
     setSelectNode(llmNode);
   }, [message, getSelectedNode, setSelectNode, addNode, nodes]);
-
-  const handleNodeClick = useCallback((event, node) => {
-    setSelectNode(node);
-  }, []);
 
   return (
     <div className="h-full relative" ref={reactFlowWrapper}>
@@ -201,7 +199,10 @@ function NodeChat() {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodeContextMenu={onNodeContextMenu}
-        onNodeClick={handleNodeClick}
+        selectionMode={SelectionMode.Partial}
+        panOnScroll
+        selectionOnDrag
+        panOnDrag={[1, 2]} // [mouse button, modifier keys]
         fitView
       >
         <Controls position='top-center' orientation='horizontal'/>

@@ -1,11 +1,11 @@
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
 import { Handle, Position, useReactFlow } from '@xyflow/react';
-import { findAllDescendants } from './Utility';
+import { getConversationHistory } from './Utility';
 
 const UserInputNode = (props) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(props.data.text);
-  const { setNodes, getEdges, getNodes } = useReactFlow();
+  const reactFlow = useReactFlow();
   const textareaRef = useRef(null);
   const wrapperRef = useRef(null);
 
@@ -14,25 +14,11 @@ const UserInputNode = (props) => {
     }, [props]);
 
   const onRegenerate = useCallback(() => {
-    const nodes = getNodes();
-    const edges = getEdges();
-    const descendants = findAllDescendants(props.id, nodes, edges);
-    
-    setNodes((nodes) => 
-      nodes.map((node) => {
-        if (descendants.includes(node.id) && node.type === 'llmResponse') {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              text: `Regenerated response times`,
-            },
-          };
-        }
-        return node;
-      })
-    );
-  }, [props, setNodes, getEdges, getNodes]);
+    const nodes = reactFlow.getNodes();
+    const edges = reactFlow.getEdges();
+    let history = getConversationHistory(reactFlow.getNode(props.id), nodes, edges);
+    console.log(history);
+  }, [props, reactFlow]);
 
   const onTextChange = useCallback((evt) => {
     setText(evt.target.value);
@@ -40,7 +26,7 @@ const UserInputNode = (props) => {
 
   const onTextBlur = useCallback(() => {
     setIsEditing(false);
-    setNodes((nodes) =>
+    reactFlow.setNodes((nodes) =>
       nodes.map((node) => {
         if (node.id === props.id) {
           node.data = { ...node.data, text: text };
@@ -48,7 +34,7 @@ const UserInputNode = (props) => {
         return node;
       })
     );
-  }, [props, setNodes, text]);
+  }, [props, reactFlow, text]);
 
   const handleDoubleClick = useCallback(() => {
     setIsEditing(true);
