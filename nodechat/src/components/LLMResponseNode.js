@@ -12,8 +12,10 @@ const LLMResponseNode = (props) => {
   const textareaRef = useRef(null);
 
   useEffect(() => { 
-    setText(props.data.text);
-    }, [props]);
+    if (props.data.text !== text) {
+        setText(props.data.text);
+    }
+    }, [props.data.text]);
 
   const onTextChange = useCallback((evt) => {
     setText(evt.target.value);

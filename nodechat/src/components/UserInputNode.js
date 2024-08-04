@@ -1,6 +1,6 @@
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
-import { Handle, Position, useReactFlow } from '@xyflow/react';
-import { getConversationHistory } from './Utility';
+import { Handle, Position, useReactFlow, getOutgoers } from '@xyflow/react';
+import { getConversationHistory, sendConversationRequest, findAllDescendants } from './Utility';
 
 const UserInputNode = (props) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -9,16 +9,77 @@ const UserInputNode = (props) => {
   const textareaRef = useRef(null);
   const wrapperRef = useRef(null);
 
-  useEffect(() => { 
-    setText(props.data.text);
-    }, [props]);
+  useEffect(() => {
+    if (props.data.text !== text) {
+      console.log("UserInputNode props updated:", props.data.text);
+      console.trace("UserInputNode props update trace:");
+      setText(props.data.text);
+    }
+  }, [props.data.text]);
 
-  const onRegenerate = useCallback(() => {
+  const onChunkReceived = useCallback((content, nodeId) => {
+    reactFlow.setNodes((nds) =>
+      nds.map((n) => {
+        if (n.id === nodeId) {
+          return { ...n,
+            data: { 
+            ...n.data, 
+            text: n.data.text + content 
+            }};
+        }
+        return n;
+      })
+    );
+  }, [reactFlow]);
+
+  const regenerateNode = useCallback(async (node) => {
     const nodes = reactFlow.getNodes();
     const edges = reactFlow.getEdges();
-    let history = getConversationHistory(reactFlow.getNode(props.id), nodes, edges);
-    console.log(history);
-  }, [props, reactFlow]);
+    const history = getConversationHistory(node, nodes, edges);
+
+    try {
+      await sendConversationRequest('generate', history, (content) => onChunkReceived(content, node.id));
+    } catch (error) {
+      console.error('Failed to generate response:', error);
+    }
+  }, [reactFlow, onChunkReceived]);
+
+  const onRegenerate = useCallback(async () => {
+    const nodes = reactFlow.getNodes();
+    const edges = reactFlow.getEdges();
+    const userNode = reactFlow.getNode(props.id);
+    const outgoers = getOutgoers(userNode, nodes, edges);
+
+    // If no LLM response node, create one
+    if (outgoers.length === 0) {
+      const llmNode = {
+        id: `llmResponse-${Date.now()}`,
+        type: 'llmResponse',
+        data: { text: '' },
+        position: { x: userNode.position.x, y: userNode.position.y + 150 },
+      };
+
+      reactFlow.setNodes((nds) => nds.concat(llmNode));
+      reactFlow.setEdges((eds) => eds.concat({
+        id: `e${userNode.id}-${llmNode.id}`,
+        source: userNode.id,
+        target: llmNode.id,
+        type: 'custom',
+      }));
+
+      await regenerateNode(llmNode);
+    }
+
+    // Regenerate all descendants
+    const descendants = findAllDescendants(userNode.id, nodes, edges);
+    for (const descendantId of descendants) {
+      const descendantNode = nodes.find(n => n.id === descendantId);
+      if (descendantNode.type === 'llmResponse') {
+        descendantNode.data.text = ''; // Clear the previous text
+        await regenerateNode(descendantNode);
+      }
+    }
+  }, [props.id, reactFlow, regenerateNode]);
 
   const onTextChange = useCallback((evt) => {
     setText(evt.target.value);
@@ -34,10 +95,16 @@ const UserInputNode = (props) => {
         return node;
       })
     );
-  }, [props, reactFlow, text]);
+  }, [props.id, reactFlow, text]);
 
   const handleDoubleClick = useCallback(() => {
     setIsEditing(true);
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.select();
+      }
+    }, 100);
   }, []);
 
   const updateSize = useCallback(() => {

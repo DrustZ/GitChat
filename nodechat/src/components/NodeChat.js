@@ -16,6 +16,7 @@ import 'react-contexify/dist/ReactContexify.css';
 import UserInputNode from './UserInputNode';
 import LLMResponseNode from './LLMResponseNode';
 import CustomEdge from './CustomEdge';
+import { sendConversationRequest, getConversationHistory } from './Utility';
 
 const nodeTypes = {
   userInput: UserInputNode,
@@ -40,6 +41,7 @@ function NodeChat() {
   const { show } = useContextMenu({
     id: MENU_ID,
   });
+  const currentLlmNodeId = useRef(null);
 
   const onEdgeClick = useCallback((edgeId) => {
     setEdges((eds) => eds.filter((e) => e.id !== edgeId));
@@ -165,7 +167,22 @@ function NodeChat() {
     return nodes.find(node => node.selected);
   }, [nodes]);
 
-  const handleSendMessage = useCallback(() => {
+  const onChunkReceived = useCallback((content) => {
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.id === currentLlmNodeId.current) {
+          return { ...n,
+            data: { 
+            ...n.data, 
+            text: n.data.text + content 
+            }};
+        }
+        return n;
+      })
+    );
+  }, [setNodes]);
+
+  const handleSendMessage = useCallback(async () => {
     if (message.trim() === '') return;
 
     let selectedNode = getSelectedNode();
@@ -179,11 +196,20 @@ function NodeChat() {
     const userNode = addNode('userInput', sourceNode, { x: (Math.random()-0.5)*50, y: 130 + (Math.random()-0.5) * 50 }, message, !!sourceNode);
     
     // Automatically add an LLM response node
-    const llmNode = addNode('llmResponse', userNode, { x: 0, y: 150}, 'LLM response placeholder', true);
-    
+    const llmNode = addNode('llmResponse', userNode, { x: 0, y: 150}, '', true);
+    currentLlmNodeId.current = llmNode.id;
+    llmNode.data.text = '';
     setMessage('');
     setSelectNode(llmNode);
-  }, [message, getSelectedNode, setSelectNode, addNode, nodes]);
+    let history = getConversationHistory(userNode, nodes, edges);
+    
+    try {
+      await sendConversationRequest('generate', history, onChunkReceived);
+    } catch (error) {
+      console.error('Failed to generate response:', error);
+      // Handle error (e.g., show error message to user)
+    }
+  }, [message, getSelectedNode, addNode, setSelectNode, nodes, edges, onChunkReceived]);
 
   return (
     <div className="h-full relative" ref={reactFlowWrapper}>
