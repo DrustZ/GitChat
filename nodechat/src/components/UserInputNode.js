@@ -1,16 +1,38 @@
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
-import { Handle, Position, useReactFlow, NodeResizer } from '@xyflow/react';
+import { Handle, Position, useReactFlow } from '@xyflow/react';
+import { findAllDescendants } from './Utility';
 
-const UserInputNode = ({ id, data }) => {
+const UserInputNode = (props) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [text, setText] = useState(data.text);
-  const { setNodes } = useReactFlow();
+  const [text, setText] = useState(props.data.text);
+  const { setNodes, getEdges, getNodes } = useReactFlow();
   const textareaRef = useRef(null);
   const wrapperRef = useRef(null);
 
-  const onDelete = useCallback(() => {
-    setNodes((nodes) => nodes.filter((n) => n.id !== id));
-  }, [id, setNodes]);
+  useEffect(() => { 
+    setText(props.data.text);
+    }, [props]);
+
+  const onRegenerate = useCallback(() => {
+    const nodes = getNodes();
+    const edges = getEdges();
+    const descendants = findAllDescendants(props.id, nodes, edges);
+    
+    setNodes((nodes) => 
+      nodes.map((node) => {
+        if (descendants.includes(node.id) && node.type === 'llmResponse') {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              text: `Regenerated response times`,
+            },
+          };
+        }
+        return node;
+      })
+    );
+  }, [props, setNodes, getEdges, getNodes]);
 
   const onTextChange = useCallback((evt) => {
     setText(evt.target.value);
@@ -20,13 +42,13 @@ const UserInputNode = ({ id, data }) => {
     setIsEditing(false);
     setNodes((nodes) =>
       nodes.map((node) => {
-        if (node.id === id) {
-          node.data = { ...node.data, text };
+        if (node.id === props.id) {
+          node.data = { ...node.data, text: text };
         }
         return node;
       })
     );
-  }, [id, setNodes, text]);
+  }, [props, setNodes, text]);
 
   const handleDoubleClick = useCallback(() => {
     setIsEditing(true);
@@ -58,8 +80,8 @@ const UserInputNode = ({ id, data }) => {
   `;
 
   return (
-    <div ref={wrapperRef} className="relative">
-      <div className="absolute inset-0 px-4 py-2 shadow-md rounded-md bg-green-100 border-2 border-green-300">
+    <div ref={wrapperRef} className={`relative`}>
+      <div className={`absolute inset-0 px-4 py-2 shadow-md rounded-md bg-green-100 border-2  ${props.selected ? 'border-green-500' : 'border-green-200'} `}>
         <Handle 
           type="target" 
           position={Position.Top} 
@@ -89,10 +111,10 @@ const UserInputNode = ({ id, data }) => {
           style={{ bottom: -10 }}
         />
         <button
-          className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center"
-          onClick={onDelete}
+          className="absolute top-0 right-0 bg-green-300 text-white rounded-full w-5 h-5 flex items-center justify-center"
+          onClick={onRegenerate}
         >
-          ×
+          ♻️
         </button>
       </div>
     </div>

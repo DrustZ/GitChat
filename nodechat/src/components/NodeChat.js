@@ -10,7 +10,6 @@ import {
   useStoreApi,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-
 import { Menu, Item, useContextMenu } from 'react-contexify';
 import 'react-contexify/dist/ReactContexify.css';
 import UserInputNode from './UserInputNode';
@@ -35,25 +34,25 @@ function NodeChat() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const reactFlowWrapper = useRef(null);
   const [message, setMessage] = useState('');
-  const [selectedNode, setSelectedNode] = useState(null);
   const store = useStoreApi();
-  const { screenToFlowPosition } = useReactFlow();
+  const reactFlow = useReactFlow();
   const { show } = useContextMenu({
     id: MENU_ID,
   });
+
+  const onEdgeClick = useCallback((edgeId) => {
+    setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+  }, [setEdges]);
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => eds.concat({ 
       ...params, 
       id: `e${params.source}-${params.target}-${Date.now()}`,
+      data: { onEdgeClick },
       type: 'custom' 
     })),
-    [setEdges]
+    [onEdgeClick, setEdges]
   );
-
-  const onEdgeClick = useCallback((edgeId) => {
-    setEdges((eds) => eds.filter((e) => e.id !== edgeId));
-  }, [setEdges]);
 
   const addNode = useCallback((type, sourceNode = null, offset = { x: 0, y: 0 }, text = null, connectToSource = false) => {
     const {
@@ -98,13 +97,14 @@ function NodeChat() {
           id: `e${sourceNode.id}-${newNode.id}`,
           source: sourceNode.id,
           target: newNode.id,
+          data: { onEdgeClick },
           type: 'custom',
         })
       );
     }
 
     return newNode;
-  }, [setNodes, setEdges, store]);
+  }, [setNodes, setEdges, onEdgeClick, store]);
 
   const onNodeContextMenu = useCallback(
     (event, node) => {
@@ -114,14 +114,14 @@ function NodeChat() {
         event,
         props: {
           node,
-          position: screenToFlowPosition({
+          position: reactFlow.screenToFlowPosition({
             x: event.clientX - pane.left,
             y: event.clientY - pane.top,
           }),
         },
       });
     },
-    [show, screenToFlowPosition]
+    [show, reactFlow]
   );
 
   const handleReplicate = useCallback(({ props }) => {
@@ -136,12 +136,13 @@ function NodeChat() {
             id: `e${edge.source}-${newNode.id}`,
             source: edge.source,
             target: newNode.id,
+            data: { onEdgeClick },
             type: 'custom',
           })
         );
       }
     });
-  }, [addNode, edges, setEdges]);
+  }, [addNode, edges, onEdgeClick, setEdges]);
 
   const handleCreateConnectedNode = useCallback(({ props }) => {
     const { node } = props;
@@ -149,32 +150,48 @@ function NodeChat() {
     addNode(newType, node, { x: 0, y: 150 }, null, true);
   }, [addNode]);
 
+  const setSelectNode = useCallback((node) => {
+    setNodes((nds) =>
+      nds.map((n) => {        
+        n.selected = n.id === node.id;
+        return n;
+      })
+    );
+  }, [setNodes]);
+
+  const getSelectedNode = useCallback(() => {
+    return nodes.find(node => node.selected);
+  }, [nodes]);
+
   const handleSendMessage = useCallback(() => {
     if (message.trim() === '') return;
 
+    let selectedNode = getSelectedNode();
     let sourceNode = selectedNode && selectedNode.type === 'llmResponse' ? selectedNode : null;
+
+    if (!sourceNode) {
+      const latestLLMResponseNode = nodes.filter(node => node.type === 'llmResponse').slice(-1)[0];
+      sourceNode = latestLLMResponseNode || null;
+    }
+
     const userNode = addNode('userInput', sourceNode, { x: 0, y: 150 }, message, !!sourceNode);
     
     // Automatically add an LLM response node
-    addNode('llmResponse', userNode, { x: 0, y: 150 }, 'LLM response placeholder', true);
+    const llmNode = addNode('llmResponse', userNode, { x: 0, y: 150 }, 'LLM response placeholder', true);
     
     setMessage('');
-    setSelectedNode(null);
-  }, [message, selectedNode, addNode]);
+    setSelectNode(llmNode);
+  }, [message, getSelectedNode, setSelectNode, addNode, nodes]);
 
   const handleNodeClick = useCallback((event, node) => {
-    setSelectedNode(node);
+    setSelectNode(node);
   }, []);
 
   return (
     <div className="h-full relative" ref={reactFlowWrapper}>
       <ReactFlow
         nodes={nodes}
-        edges={edges.map(edge => ({ 
-          ...edge, 
-          data: { onEdgeClick },
-          key: edge.id
-        }))}
+        edges={edges}
         onMove={() => {
           currentOverlapOffset = 0;
         }}
@@ -187,20 +204,25 @@ function NodeChat() {
         onNodeClick={handleNodeClick}
         fitView
       >
-        <Controls />
-        <MiniMap />
+        <Controls position='top-center' orientation='horizontal'/>
+        <MiniMap position='top-right' pannable zoomable/>
         <Background variant="dots" gap={12} size={1} />
       </ReactFlow>
       <div className="absolute top-4 left-4 z-20 flex space-x-2">
         <button 
           className="bg-green-500 text-white px-4 py-2 rounded"
-          onClick={() => addNode('userInput')}
+          onClick={() => {
+            addNode('userInput');
+            console.log(reactFlow.getNodes());
+          }}
         >
           Add User Input
         </button>
         <button 
           className="bg-blue-500 text-white px-4 py-2 rounded"
-          onClick={() => addNode('llmResponse')}
+          onClick={() => {
+            addNode('llmResponse');
+          }}
         >
           Add LLM Response
         </button>
@@ -211,12 +233,12 @@ function NodeChat() {
       </Menu>
       <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 z-50">
         <div className="flex items-center">
-          <input
-            type="text"
+          <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             className="flex-grow mr-2 p-2 border border-gray-300 rounded"
             placeholder="Type your message here..."
+            style={{ maxHeight: '5em', resize: 'none' }}
           />
           <button
             onClick={handleSendMessage}
