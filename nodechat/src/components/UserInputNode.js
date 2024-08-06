@@ -5,17 +5,23 @@ import { getConversationHistory, sendConversationRequest, findAllDescendants } f
 const UserInputNode = (props) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(props.data.text);
+  const [isFolded, setIsFolded] = useState(false);
+  const [isFoldable, setIsFoldable] = useState(false);
   const reactFlow = useReactFlow();
   const textareaRef = useRef(null);
   const wrapperRef = useRef(null);
 
   useEffect(() => {
     if (props.data.text !== text) {
-      console.log("UserInputNode props updated:", props.data.text);
-      console.trace("UserInputNode props update trace:");
       setText(props.data.text);
     }
   }, [props.data.text]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      setIsFoldable(textareaRef.current.scrollHeight > 160); // Set the foldable height limit (e.g., 160px)
+    }
+  }, [text, isEditing]);
 
   const onChunkReceived = useCallback((content, nodeId) => {
     reactFlow.setNodes((nds) =>
@@ -95,6 +101,7 @@ const UserInputNode = (props) => {
         return node;
       })
     );
+    updateSize();
   }, [props.id, reactFlow, text]);
 
   const handleDoubleClick = useCallback(() => {
@@ -107,23 +114,73 @@ const UserInputNode = (props) => {
     }, 100);
   }, []);
 
+  const toggleFold = () => {
+    setIsFolded(!isFolded);
+  };
+
   const updateSize = useCallback(() => {
     if (textareaRef.current && wrapperRef.current) {
-      const textareaHeight = textareaRef.current.scrollHeight;
-      wrapperRef.current.style.height = `${textareaHeight + 60}px`; // Add padding
-      wrapperRef.current.style.width = `${textareaRef.current.offsetWidth + 32}px`; // Add padding
-    }
-  }, []);
+      const tempSpan = document.createElement('span');
+      tempSpan.style.visibility = 'hidden';
+      tempSpan.style.position = 'absolute';
+      tempSpan.style.whiteSpace = 'pre-wrap';
+      tempSpan.style.width = textareaRef.current.style.width; // Use the user-specified width
 
+      tempSpan.innerText = textareaRef.current.value;
+  
+      document.body.appendChild(tempSpan);
+  
+      const fontSize = parseFloat(getComputedStyle(textareaRef.current).fontSize);
+      const maxTextareaWidthPx = (isFolded ? 15 : 35) * fontSize; // Convert 35em to px based on the current font size
+      const textareaWidthPx = Math.min(tempSpan.offsetWidth + 20, maxTextareaWidthPx); // Set max width to 35em
+      document.body.removeChild(tempSpan);
+  
+      const adjustedWidthPx = Math.min(textareaRef.current.offsetWidth, textareaWidthPx);
+      const adjustedWidthEm = adjustedWidthPx / fontSize;
+  
+      textareaRef.current.style.width = `${adjustedWidthEm}em`;
+      textareaRef.current.style.height = 'auto'; // Reset height to auto to recalculate based on content
+      const textareaHeightPx = textareaRef.current.scrollHeight;
+      const textareaHeightEm = textareaHeightPx / fontSize;
+      textareaRef.current.style.height = `${textareaHeightEm}em`;
+  
+      const wrapperHeightEm = isFolded ? 15 : (textareaHeightPx + 60) / fontSize; // Update height based on folded state and convert to em
+  
+      wrapperRef.current.style.width = `${Math.max(adjustedWidthEm + 2, 12)}em`;
+      wrapperRef.current.style.height = `${wrapperHeightEm}em`;
+    }
+  }, [isFolded]);
+  
   useEffect(() => {
-    updateSize();
+    if (textareaRef.current) {
+      const tempSpan = document.createElement('span');
+      tempSpan.style.visibility = 'hidden';
+      tempSpan.style.position = 'absolute';
+      tempSpan.style.whiteSpace = 'pre-wrap';
+      tempSpan.style.width = 'auto'; // Calculate width based on text content
+      tempSpan.innerText = textareaRef.current.value;
+  
+      document.body.appendChild(tempSpan);
+  
+      const fontSize = parseFloat(getComputedStyle(textareaRef.current).fontSize);
+      const minTextareaWidthPx = 10 * fontSize; // Convert 10em to px
+      const maxTextareaWidthPx = 35 * fontSize; // Convert 35em to px based on the current font size
+      const textareaWidthPx = Math.min(Math.max(tempSpan.offsetWidth + 20, minTextareaWidthPx), maxTextareaWidthPx); // Set width between 10em and 35em
+      document.body.removeChild(tempSpan);
+  
+      const adjustedWidthEm = textareaWidthPx / fontSize;
+      textareaRef.current.style.width = `${adjustedWidthEm}em`;
+    }
+  
+    updateSize(); // Set the initial size based on content
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
   }, [updateSize]);
-
+  
   useEffect(() => {
     updateSize();
-  }, [text, isEditing, updateSize]);
+  }, [text, isEditing, isFolded, updateSize]); // Add isFolded to the dependency array
+  
 
   const commonTextareaStyles = `
     w-full p-2 text-gray-700 border rounded
@@ -133,27 +190,37 @@ const UserInputNode = (props) => {
   `;
 
   return (
-    <div ref={wrapperRef} className={`relative`}>
-      <div className={`absolute inset-0 px-4 py-2 shadow-md rounded-md bg-green-100 border-2  ${props.selected ? 'border-green-500' : 'border-green-200'} `}>
+    <div ref={wrapperRef} className="relative">
+      <div className={`absolute inset-0 px-4 py-2 shadow-md rounded-md bg-green-100 border-2  ${props.selected ? 'border-green-500' : 'border-green-200'}`}>
         <Handle 
           type="target" 
           position={Position.Top} 
           className="!w-3 !h-3 !bg-teal-500" 
           style={{ top: -10 }}
         />
-        <div className="font-bold text-sm text-green-700 mb-2">User Input</div>
+        <div className="font-bold text-sm text-green-700 mb-2 flex justify-between">
+          User Input
+          {isFoldable && (
+            <button onClick={toggleFold} className="text-xs text-green-500">
+              {isFolded ? 'Expand' : 'Fold'}
+            </button>
+          )}
+        </div>
         <textarea
           ref={textareaRef}
-          className={`${commonTextareaStyles} ${isEditing ? 'nopan nowheel resize' : 'bg-transparent resize-none'}`}
+          className={`${commonTextareaStyles} ${isEditing ? 'nopan nowheel resize' : 'bg-transparent resize-none'} ${isFolded ? 'nowheel' : ''}`}
           value={text}
           onChange={onTextChange}
           onBlur={onTextBlur}
           readOnly={!isEditing}
           onDoubleClick={handleDoubleClick}
           style={{ 
+            width: 'auto', // Initially set width based on content
             height: 'auto',
             minWidth: '10em',
-            maxHeight: isEditing ? '30em' : 'none',
+            maxWidth: '35em', // Set max width
+            maxHeight: isFolded ? '12em' : 'none',
+            overflow: isFolded ? 'auto' : 'visible',
             cursor: isEditing ? 'text' : 'default'
           }}
         />
