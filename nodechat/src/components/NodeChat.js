@@ -58,55 +58,59 @@ function NodeChat() {
   );
 
   const addNode = useCallback((type, sourceNode = null, offset = { x: 0, y: 0 }, text = null, connectToSource = false) => {
-    const {
-      height,
-      width,
-      transform: [transformX, transformY, zoomLevel]
-    } = store.getState();
-    const zoomMultiplier = 1 / zoomLevel;
-    const centerX = -transformX * zoomMultiplier + (width * zoomMultiplier) / 2;
-    const centerY =
-      -transformY * zoomMultiplier + (height * zoomMultiplier) / 2;
+    return new Promise((resolve) => {
+      const {
+        height,
+        width,
+        transform: [transformX, transformY, zoomLevel]
+      } = store.getState();
+      const zoomMultiplier = 1 / zoomLevel;
+      const centerX = -transformX * zoomMultiplier + (width * zoomMultiplier) / 2;
+      const centerY =
+        -transformY * zoomMultiplier + (height * zoomMultiplier) / 2;
 
-    let position;
-    if (sourceNode) {
-      position = {
-        x: sourceNode.position.x + offset.x,
-        y: sourceNode.position.y + offset.y,
+      let position;
+      if (sourceNode) {
+        position = {
+          x: sourceNode.position.x + offset.x,
+          y: sourceNode.position.y + offset.y,
+        };
+      } else {
+        position = {
+          x: centerX + currentOverlapOffset,
+          y: centerY + currentOverlapOffset
+        };
+        currentOverlapOffset += OVERLAP_OFFSET;
+      }
+
+      position.x = Number(position.x) || 0;
+      position.y = Number(position.y) || 0;
+
+      const newNode = {
+        id: `${type}-${Date.now()}`,
+        type,
+        data: { text: text || (type === 'userInput' ? 'New user input' : 'New LLM response') },
+        position: position,
       };
-    } else {
-      position = {
-        x: centerX + currentOverlapOffset,
-        y: centerY + currentOverlapOffset
-      };
-      currentOverlapOffset += OVERLAP_OFFSET;
-    }
 
-    position.x = Number(position.x) || 0;
-    position.y = Number(position.y) || 0;
+      setNodes((nds) => {
+        const updatedNodes = nds.concat(newNode);
+        resolve(newNode);
+        return updatedNodes;
+      });
 
-    const newNode = {
-      id: `${type}-${Date.now()}`,
-      type,
-      data: { text: text || (type === 'userInput' ? 'New user input' : 'New LLM response') },
-      position: position,
-    };
-
-    setNodes((nds) => nds.concat(newNode));
-
-    if (sourceNode && connectToSource) {
-      setEdges((eds) =>
-        eds.concat({
-          id: `e${sourceNode.id}-${newNode.id}`,
-          source: sourceNode.id,
-          target: newNode.id,
-          data: { onEdgeClick },
-          type: 'custom',
-        })
-      );
-    }
-
-    return newNode;
+      if (sourceNode && connectToSource) {
+        setEdges((eds) =>
+          eds.concat({
+            id: `e${sourceNode.id}-${newNode.id}`,
+            source: sourceNode.id,
+            target: newNode.id,
+            data: { onEdgeClick },
+            type: 'custom',
+          })
+        );
+      }
+    });
   }, [setNodes, setEdges, onEdgeClick, store]);
 
   const onNodeContextMenu = useCallback(
@@ -127,10 +131,10 @@ function NodeChat() {
     [show, reactFlow]
   );
 
-  const handleReplicate = useCallback(({ props }) => {
+  const handleReplicate = useCallback(async ({ props }) => {
     const { node } = props;
     //add a small random offset to the new node
-    const newNode = addNode(node.type, node, { x: 200 + (Math.random()-0.5) * 100, y: (Math.random()-0.5) * 10 }, node.data.text, false);
+    const newNode = await addNode(node.type, node, { x: 200 + (Math.random()-0.5) * 100, y: (Math.random()-0.5) * 10 }, node.data.text, false);
     
     // Replicate upstream connections
     edges.forEach((edge) => {
@@ -151,7 +155,9 @@ function NodeChat() {
   const handleCreateConnectedNode = useCallback(({ props }) => {
     const { node } = props;
     const newType = node.type === 'userInput' ? 'llmResponse' : 'userInput';
-    addNode(newType, node, { x: (Math.random()-0.5) * 100, y: 130 + (Math.random()-0.5) * 50 }, null, true);
+    const nodeElement = document.querySelector(`[data-id="${node.id}"]`);
+    const nodeHeight = nodeElement ? nodeElement.offsetHeight : 0;
+    addNode(newType, node, { x: (Math.random()-0.5) * 100, y: 30 + nodeHeight }, null, true);
   }, [addNode]);
 
   const setSelectNode = useCallback((node) => {
@@ -193,22 +199,30 @@ function NodeChat() {
       sourceNode = latestLLMResponseNode || null;
     }
 
-    const userNode = addNode('userInput', sourceNode, { x: (Math.random()-0.5)*50, y: 130 + (Math.random()-0.5) * 50 }, message, !!sourceNode);
+    const sourceNodeElement = document.querySelector(`[data-id="${sourceNode.id}"]`);
+    let sourceNodeHeight = sourceNodeElement ? sourceNodeElement.offsetHeight : 0;
+
+    const userNode = await addNode('userInput', sourceNode, { x: (Math.random()-0.5)*50, y: sourceNodeHeight + 20 }, message, !!sourceNode);
     
-    // Automatically add an LLM response node
-    const llmNode = addNode('llmResponse', userNode, { x: 0, y: 150}, '', true);
-    currentLlmNodeId.current = llmNode.id;
-    llmNode.data.text = '';
-    setMessage('');
-    setSelectNode(llmNode);
-    let history = getConversationHistory(userNode, nodes, edges);
-    
-    try {
-      await sendConversationRequest('generate', history, onChunkReceived);
-    } catch (error) {
-      console.error('Failed to generate response:', error);
-      // Handle error (e.g., show error message to user)
-    }
+    // Add an LLM response node after the user node is rendered and height is measured
+    setTimeout(async () => {
+      const userNodeElement = document.querySelector(`[data-id="${userNode.id}"]`);
+      const userNodeHeight = userNodeElement ? userNodeElement.offsetHeight : 0;
+
+      const llmNode = await addNode('llmResponse', userNode, { x: 0, y: userNodeHeight + 20 }, '', true);
+      currentLlmNodeId.current = llmNode.id;
+      llmNode.data.text = '';
+      setMessage('');
+      setSelectNode(llmNode);
+      let history = getConversationHistory(userNode, nodes, edges);
+
+      try {
+        await sendConversationRequest('generate', history, onChunkReceived);
+      } catch (error) {
+        console.error('Failed to generate response:', error);
+        // Handle error (e.g., show error message to user)
+      }
+    }, 0);
   }, [message, getSelectedNode, addNode, setSelectNode, nodes, edges, onChunkReceived]);
 
   return (
