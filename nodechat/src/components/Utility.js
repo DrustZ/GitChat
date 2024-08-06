@@ -103,6 +103,5 @@ export function getConversationHistory(node, nodes, edges) {
 
   // Start processing from the given node
   processNode(node);
-
   return history;
 }

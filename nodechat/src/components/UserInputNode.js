@@ -65,15 +65,20 @@ const UserInputNode = (props) => {
         position: { x: userNode.position.x, y: userNode.position.y + 150 },
       };
 
-      reactFlow.setNodes((nds) => nds.concat(llmNode));
-      reactFlow.setEdges((eds) => eds.concat({
-        id: `e${userNode.id}-${llmNode.id}`,
+      reactFlow.addNodes(llmNode);
+      const edgeId = `e${userNode.id}-${llmNode.id}`;
+      reactFlow.addEdges({
+        id: edgeId,
         source: userNode.id,
         target: llmNode.id,
+        data: { onEdgeClick: () => reactFlow.deleteElements({ edges: [{ id: edgeId }] })},
         type: 'custom',
-      }));
+      });
 
+      // Wait for React to update the state
+      await new Promise(resolve => setTimeout(resolve, 0));
       await regenerateNode(llmNode);
+      return;
     }
 
     // Regenerate all descendants

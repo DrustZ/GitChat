@@ -194,36 +194,41 @@ function NodeChat() {
     let selectedNode = getSelectedNode();
     let sourceNode = selectedNode && selectedNode.type === 'llmResponse' ? selectedNode : null;
 
+    let sourceNodeElement = null;
     if (!sourceNode) {
       const latestLLMResponseNode = nodes.filter(node => node.type === 'llmResponse').slice(-1)[0];
       sourceNode = latestLLMResponseNode || null;
+    } 
+    if (sourceNode) {
+      sourceNodeElement = document.querySelector(`[data-id="${sourceNode.id}"]`);
     }
-
-    const sourceNodeElement = document.querySelector(`[data-id="${sourceNode.id}"]`);
     let sourceNodeHeight = sourceNodeElement ? sourceNodeElement.offsetHeight : 0;
 
     const userNode = await addNode('userInput', sourceNode, { x: (Math.random()-0.5)*50, y: sourceNodeHeight + 20 }, message, !!sourceNode);
+    // Wait for React to update the state
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const userNodeElement = document.querySelector(`[data-id="${userNode.id}"]`);
+    const userNodeHeight = userNodeElement ? userNodeElement.offsetHeight : 0;
+
+    const llmNode = await addNode('llmResponse', userNode, { x: 0, y: userNodeHeight + 20 }, '', true);
+    currentLlmNodeId.current = llmNode.id;
+    llmNode.data.text = '';
+    setMessage('');
+    setSelectNode(llmNode);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    // Get the updated nodes and edges
+    const updatedNodes = reactFlow.getNodes();
+    const updatedEdges = reactFlow.getEdges();
+
+    let history = getConversationHistory(userNode, updatedNodes, updatedEdges);
     
-    // Add an LLM response node after the user node is rendered and height is measured
-    setTimeout(async () => {
-      const userNodeElement = document.querySelector(`[data-id="${userNode.id}"]`);
-      const userNodeHeight = userNodeElement ? userNodeElement.offsetHeight : 0;
-
-      const llmNode = await addNode('llmResponse', userNode, { x: 0, y: userNodeHeight + 20 }, '', true);
-      currentLlmNodeId.current = llmNode.id;
-      llmNode.data.text = '';
-      setMessage('');
-      setSelectNode(llmNode);
-      let history = getConversationHistory(userNode, nodes, edges);
-
-      try {
-        await sendConversationRequest('generate', history, onChunkReceived);
-      } catch (error) {
-        console.error('Failed to generate response:', error);
-        // Handle error (e.g., show error message to user)
-      }
-    }, 0);
-  }, [message, getSelectedNode, addNode, setSelectNode, nodes, edges, onChunkReceived]);
+    try {
+      await sendConversationRequest('generate', history, onChunkReceived);
+    } catch (error) {
+      console.error('Failed to generate response:', error);
+      // Handle error (e.g., show error message to user)
+    }
+  }, [message, getSelectedNode, addNode, setSelectNode, reactFlow, nodes, onChunkReceived]);
 
   return (
     <div className="h-full relative" ref={reactFlowWrapper}>
