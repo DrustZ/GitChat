@@ -10,6 +10,13 @@ Try out Gitchat! It loosly applies the git concept - you can merge, branch and m
 
 It offers unprecedented flexibility in Large Language Model (LLM) interactions, allowing users to create branches, merge conversations, and rewire chat histories.
 
+
+
+https://github.com/user-attachments/assets/f4d123f3-4b2d-4c8d-94b2-034a1acaa00d
+
+
+
+
 ## Features
 
 1. **Non-linear Conversation Presentation**
