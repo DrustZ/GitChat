@@ -1,4 +1,4 @@
-# GitChat
+# GitChat 🌿🌿🌿
 
 - Ever got frustrated when revising a chat history with LLM, the whole follow-ups got disappeared? 
 
