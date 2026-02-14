@@ -1,9 +1,11 @@
 import { getOutgoers, getIncomers } from '@xyflow/react';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 export async function sendConversationRequest(endpoint, conversation, onChunkReceived) {
   try {
     // Make the POST request and handle streaming response
-    const response = await fetch(`http://localhost:8000/${endpoint}`, {
+    const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

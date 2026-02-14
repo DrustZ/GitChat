@@ -2,14 +2,19 @@ const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
 const fs = require('fs').promises;
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
-const port = 8000;
+const port = process.env.PORT || 8000;
 
 // Configure CORS
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',')
+  : ['http://localhost:3000'];
+
 app.use(cors({
-  origin: 'http://localhost:3000', // Replace with your frontend URL
+  origin: allowedOrigins,
   credentials: true
 }));
 app.use(express.json());
@@ -21,7 +26,7 @@ let systemPrompt;
 
 async function loadSystemPrompt() {
   try {
-    systemPrompt = await fs.readFile("llm-branched-conversation-prompt.md", "utf-8");
+    systemPrompt = await fs.readFile(path.join(__dirname, "llm-branched-conversation-prompt.md"), "utf-8");
   } catch (error) {
     console.error("Error loading system prompt:", error);
     process.exit(1);
