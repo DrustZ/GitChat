@@ -81,12 +81,21 @@ https://github.com/user-attachments/assets/f4d123f3-4b2d-4c8d-94b2-034a1acaa00d
    npm start
    ```
 
-5. Do it again for the server (remember to create a .env for your openai key `OPENAI_API_KEY = `):
+5. Do it again for the server (remember to create a .env for your Anthropic key `ANTHROPIC_API_KEY = `):
    ```
    cd server
    npm install
    npm start
    ```
+
+   The server reads these variables from `server/.env`:
+
+   | Variable | Required | Description |
+   | --- | --- | --- |
+   | `ANTHROPIC_API_KEY` | Yes (default provider) | Your Anthropic API key |
+   | `ANTHROPIC_MODEL` | No | Claude model to use. Defaults to `claude-sonnet-5`; use `claude-haiku-4-5-20251001` for a cheaper/faster option or `claude-opus-5` for harder reasoning |
+   | `LLM_PROVIDER` | No | `anthropic` (default) or `openai` |
+   | `OPENAI_API_KEY` | Only if `LLM_PROVIDER=openai` | Your OpenAI API key, for the original OpenAI path |
 
 5. Open your browser and visit `http://localhost:3000` to see the application.
 

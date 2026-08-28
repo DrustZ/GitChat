@@ -35,6 +35,8 @@ export async function sendConversationRequest(endpoint, conversation, onChunkRec
           const data = JSON.parse(chunk.slice(6));
           if (data.content === '[DONE]') {
             return;
+          } else if (data.error !== undefined) {
+            onChunkReceived(`\n[Error: ${data.error}]`);
           } else {
             onChunkReceived(data.content);
           }

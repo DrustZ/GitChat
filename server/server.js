@@ -1,8 +1,10 @@
 const express = require('express');
 const cors = require('cors');
-const OpenAI = require('openai');
 const fs = require('fs').promises;
 require('dotenv').config();
+
+// dotenv must run before this require: the provider reads its API key on load
+const llm = require('./llm');
 
 const app = express();
 const port = 8000;
@@ -13,9 +15,6 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
-
-// Configure OpenAI API
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 let systemPrompt;
 
@@ -38,26 +37,28 @@ app.post("/generate", async (req, res) => {
       'Connection': 'keep-alive'
     });
 
-    const stream = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: JSON.stringify(data) }
-      ],
-      stream: true,
-    });
+    const stream = llm.streamMessage(
+      [{ role: "user", content: JSON.stringify(data) }],
+      systemPrompt
+    );
 
     for await (const chunk of stream) {
-      if (chunk.choices[0]?.delta?.content) {
-        res.write(`data: ${JSON.stringify({ content: chunk.choices[0].delta.content })}\n\n`);
-      }
+      res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
     }
 
     res.write(`data: ${JSON.stringify({ content: "[DONE]" })}\n\n`);
     res.end();
   } catch (error) {
     console.error("Error in generate endpoint:", error);
-    res.status(500).json({ error: error.message });
+    if (res.headersSent) {
+      // The SSE stream is already open: res.status(500) here would throw
+      // ERR_HTTP_HEADERS_SENT and kill the process, so report in-stream instead.
+      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      res.write(`data: ${JSON.stringify({ content: "[DONE]" })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ error: error.message });
+    }
   }
 });
 
